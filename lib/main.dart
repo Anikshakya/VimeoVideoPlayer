@@ -12,6 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Vimeo Uploader and Player',
       theme: ThemeData(
         primarySwatch: Colors.red,
