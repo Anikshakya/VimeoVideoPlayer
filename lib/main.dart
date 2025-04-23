@@ -14,6 +14,7 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Vimeo Uploader and Player',
+      
       theme: ThemeData(
         primarySwatch: Colors.red,
         scaffoldBackgroundColor: Colors.black,
