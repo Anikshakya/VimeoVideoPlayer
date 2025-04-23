@@ -13,6 +13,7 @@ class VideoListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 32, 32, 32),
       appBar: AppBar(
         title: const Text('My Videos'),
         centerTitle: true,
@@ -38,13 +39,13 @@ class VideoListPage extends StatelessWidget {
           onRefresh: videoController.refreshVideos,
           child: ListView.builder(
             controller: videoController.scrollController,
-            itemCount: videoController.videos.length + 1, // +1 for loader
+            itemCount: videoController.videos.length + 1,
             itemBuilder: (context, index) {
               if (index < videoController.videos.length) {
                 final video = videoController.videos[index];
                 return _buildVideoItem(video, index);
               } else {
-                return _buildLoader(); // Loader for pagination
+                return _buildLoader();
               }
             },
           ),
@@ -54,118 +55,77 @@ class VideoListPage extends StatelessWidget {
   }
 
   Widget _buildVideoItem(dynamic video, int index) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          final videoFiles = videoController.videos[index]["files"];
-          if (videoFiles != null) {
-            Get.to(() => VideoDetailsPage(
-              videoTitle: video['name'] ?? "Test",
-              videoFiles: videoFiles,
-            ));
-          } else {
-            Get.to(() => VimeoVideoPlayerPage(
-              videoUrl: video['uri'].split('/').last,
-            ));
-          }
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
+    return InkWell(
+      onTap: () {
+        final videoFiles = videoController.videos[index]["files"];
+        if (videoFiles != null) {
+          Get.to(() => VideoDetailsPage(
+                videoTitle: video['name'] ?? "Test",
+                videoFiles: videoFiles,
+              ));
+        } else {
+          Get.to(() => VimeoVideoPlayerPage(
+                videoUrl: video['uri'].split('/').last,
+              ));
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// Thumbnail
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                video['pictures']?['sizes']?.last['link'] ?? '',
+                width: 150,
+                height: 90,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.broken_image, size: 50),
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    width: 150,
+                    height: 90,
+                    color: Colors.grey.shade300,
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  );
+                },
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Thumbnail with play button overlay
-              Stack(
+            ),
+            const SizedBox(width: 12),
+
+            /// Video Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Image.network(
-                        video['pictures']?['sizes']?.last['link'] ?? '',
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                  : null,
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Center(
-                            child: Icon(Icons.broken_image, size: 50),
-                          );
-                        },
-                      ),
+                  Text(
+                    video['name'] ?? 'No title',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
                     ),
                   ),
-                  Positioned.fill(
-                    child: Center(
-                      child: Icon(
-                        Icons.play_circle_fill,
-                        size: 60,
-                        color: Colors.white.withOpacity(0.7),
-                      ),
-                    ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'My Channel • ${video['stats']?['plays'] ?? 0} views',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatDuration(Duration(seconds: video['duration'] ?? 0)),
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                 ],
               ),
-
-              // Video Info Section
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      video['name'] ?? 'No title',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.play_circle_outline, size: 16, color: Colors.grey),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${video['stats']?['plays'] ?? 0} plays',
-                          style: const TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
-                        const Spacer(),
-                        const Icon(Icons.timer_outlined, size: 16, color: Colors.grey),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDuration(Duration(seconds: video['duration'] ?? 0)),
-                          style: const TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
