@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
 
-class VimeoVideoPlayer extends StatefulWidget {
+class CustomVideoPlayer extends StatefulWidget {
   final List<dynamic> files;
   final String videoTitle;
   final double? aspectRatio;
@@ -12,7 +12,7 @@ class VimeoVideoPlayer extends StatefulWidget {
   final Color bufferedColor;
   final Color backgroundColor;
 
-  const VimeoVideoPlayer({
+  const CustomVideoPlayer({
     super.key,
     required this.files,
     required this.videoTitle,
@@ -24,12 +24,11 @@ class VimeoVideoPlayer extends StatefulWidget {
   });
 
   @override
-  State<VimeoVideoPlayer> createState() => _VimeoVideoPlayerState();
+  State<CustomVideoPlayer> createState() => _CustomVideoPlayerState();
 }
 
-class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
+class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
   late VideoPlayerController _controller;
-  Future<void>? _initializeVideoPlayerFuture;
   bool _isPlaying = false;
   bool _showControls = true;
   Timer? _controlsTimer;
@@ -38,24 +37,18 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
   bool _isFullScreen = false;
   bool _isMuted = false;
   bool _isBuffering = false;
-  double _volume = 1.0;
   bool _isLoading = true;
   String? _errorMessage;
   bool _isDragging = false;
-  bool _showQualityMenu = false;
   Map<String, dynamic>? _currentQuality;
   double _playbackSpeed = 1.0;
-  bool _showSpeedMenu = false;
   bool _doubleTapSeeking = false;
   Timer? _doubleTapTimer;
   bool _showDoubleTapIndicator = false;
   Duration _doubleTapSeekDuration = Duration.zero;
   bool _isDoubleTapRight = false;
-  bool _showVolumeControl = false;
-  double _currentVolume = 1.0;
   double _seekPosition = 0.0;
   bool _showSeekPreview = false;
-  double _seekPreviewPosition = 0.0;
   String _seekPreviewTime = '0:00';
 
   final List<double> _playbackSpeeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
@@ -112,25 +105,6 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
       _controller = VideoPlayerController.networkUrl(Uri.parse(_currentQuality!['link'].toString()))
         ..addListener(_videoListener);
 
-      _initializeVideoPlayerFuture = _controller.initialize().then((_) {
-        if (mounted) {
-          setState(() {
-            _duration = _controller.value.duration;
-            _isLoading = false;
-            _seekPosition = 0;
-          });
-          _controller.play();
-          _isPlaying = true;
-          _startControlsTimer();
-        }
-      }).catchError((e) {
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Failed to initialize video: ${e.toString()}';
-            _isLoading = false;
-          });
-        }
-      });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -150,9 +124,7 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
       _duration = controllerValue.duration;
       _isBuffering = controllerValue.isBuffering;
       _isPlaying = controllerValue.isPlaying;
-      _volume = controllerValue.volume;
       
-      // Only update seek position if not currently dragging
       if (!_isDragging) {
         _seekPosition = _position.inMilliseconds.toDouble();
       }
@@ -162,7 +134,7 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
   void _startControlsTimer() {
     _controlsTimer?.cancel();
     _controlsTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted && !_isDragging && !_showQualityMenu && !_showSpeedMenu) {
+      if (mounted && !_isDragging) {
         setState(() => _showControls = false);
       }
     });
@@ -184,8 +156,7 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
   void _toggleMute() {
     setState(() {
       _isMuted = !_isMuted;
-      _currentVolume = _isMuted ? 0.0 : (_currentVolume == 0.0 ? 1.0 : _currentVolume);
-      _controller.setVolume(_isMuted ? 0.0 : _currentVolume);
+      _controller.setVolume(_isMuted ? 0.0 : 1.0);
       _showControls = true;
       _startControlsTimer();
     });
@@ -207,30 +178,6 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
     });
   }
 
-  void _handleDoubleTap(bool isRightSide) {
-    if (_doubleTapSeeking) return;
-
-    setState(() {
-      _isDoubleTapRight = isRightSide;
-      _showDoubleTapIndicator = true;
-      _doubleTapSeekDuration = Duration(seconds: _seekDurationSeconds.toInt());
-    });
-
-    if (isRightSide) {
-      _controller.seekTo(_controller.value.position + _doubleTapSeekDuration);
-    } else {
-      _controller.seekTo(_controller.value.position - _doubleTapSeekDuration);
-    }
-
-    _doubleTapSeeking = true;
-    _doubleTapTimer?.cancel();
-    _doubleTapTimer = Timer(const Duration(milliseconds: 800), () {
-      setState(() {
-        _showDoubleTapIndicator = false;
-        _doubleTapSeeking = false;
-      });
-    });
-  }
 
   Widget _buildDoubleTapIndicator() {
     if (!_showDoubleTapIndicator) return const SizedBox();
@@ -250,31 +197,51 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
     );
   }
 
-  Widget _buildQualityMenu() {
-    if (_availableQualities.isEmpty) return const SizedBox();
+  void _showQualityBottomSheet() {
+    if (_availableQualities.isEmpty) return;
 
-    return Positioned(
-      right: 16,
-      bottom: 80,
-      child: Material(
-        color: Colors.black.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 150,
-          padding: const EdgeInsets.all(8),
+    setState(() {
+      _showControls = true;
+      _controlsTimer?.cancel();
+    });
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text('Quality', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              const Text(
+                'Select Quality',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              const SizedBox(height: 16),
               ..._availableQualities.map((quality) {
-                return InkWell(
+                return ListTile(
+                  title: Text(
+                    _getQualityLabel(quality),
+                    style: TextStyle(
+                      color: _currentQuality == quality ? widget.progressColor : Colors.white,
+                    ),
+                  ),
                   onTap: () {
+                    Navigator.pop(context);
                     setState(() {
                       _currentQuality = quality;
-                      _showQualityMenu = false;
                       _isLoading = true;
                     });
                     _controller.pause().then((_) {
@@ -283,65 +250,99 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
                       _initializeVideo();
                     });
                   },
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      _getQualityLabel(quality),
-                      style: TextStyle(
-                        color: _currentQuality == quality ? widget.progressColor : Colors.white,
-                      ),
-                    ),
-                  ),
                 );
-              }).toList(),
+              }),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[800],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildSpeedMenu() {
-    return Positioned(
-      right: 16,
-      bottom: 80,
-      child: Material(
-        color: Colors.black.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 150,
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text('Playback Speed', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-              ..._playbackSpeeds.map((speed) {
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      _playbackSpeed = speed;
-                      _showSpeedMenu = false;
-                      _controller.setPlaybackSpeed(speed);
-                    });
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
+  void _showSpeedBottomSheet() {
+    setState(() {
+      _showControls = true;
+      _controlsTimer?.cancel();
+    });
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+            ),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Playback Speed',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ..._playbackSpeeds.map((speed) {
+                  return ListTile(
+                    title: Text(
                       '${speed}x',
                       style: TextStyle(
                         color: _playbackSpeed == speed ? widget.progressColor : Colors.white,
                       ),
                     ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _playbackSpeed = speed;
+                        _controller.setPlaybackSpeed(speed);
+                      });
+                    },
+                  );
+                }),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[800],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    minimumSize: const Size(double.infinity, 50),
                   ),
-                );
-              }).toList(),
-            ],
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -460,6 +461,7 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
             ),
           ),
         ),
+        
         // Bottom controls
         Positioned(
           bottom: 0,
@@ -489,7 +491,6 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
                         _seekPosition = value;
                         _isDragging = true;
                         _showSeekPreview = true;
-                        _seekPreviewPosition = value;
                         _seekPreviewTime = _formatDuration(Duration(milliseconds: value.toInt()));
                       });
                     },
@@ -541,34 +542,14 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
                           '${_playbackSpeed}x',
                           style: const TextStyle(color: Colors.white),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _showSpeedMenu = !_showSpeedMenu;
-                            _showQualityMenu = false;
-                            if (_showSpeedMenu) {
-                              _controlsTimer?.cancel();
-                            } else {
-                              _startControlsTimer();
-                            }
-                          });
-                        },
+                        onPressed: _showSpeedBottomSheet,
                       ),
                       
                       // Quality selector
                       if (_availableQualities.length > 1)
                         IconButton(
                           icon: const Icon(Icons.hd, color: Colors.white),
-                          onPressed: () {
-                            setState(() {
-                              _showQualityMenu = !_showQualityMenu;
-                              _showSpeedMenu = false;
-                              if (_showQualityMenu) {
-                                _controlsTimer?.cancel();
-                              } else {
-                                _startControlsTimer();
-                              }
-                            });
-                          },
+                          onPressed: _showQualityBottomSheet,
                         ),
                       
                       // Volume control
@@ -608,9 +589,7 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
         if(_showControls == true)
           Center(
             child: InkWell(
-              onTap: () async{
-                _togglePlayPause();
-              },
+              onTap: _togglePlayPause,
               child: SizedBox(
                 height: 100,
                 width: 100,
@@ -634,174 +613,135 @@ class _VimeoVideoPlayerState extends State<VimeoVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-  if (_isLoading) {
-    return Center(child: CircularProgressIndicator(color: widget.progressColor));
-  }
+    if (_isLoading) {
+      return SizedBox(
+        height: 280,
+        child: Center(
+          child: CircularProgressIndicator(color: widget.progressColor)
+        )
+      );
+    }
 
-  if (_errorMessage != null) {
-    return Material(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                _errorMessage!,
-                style: const TextStyle(color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _initializeVideo,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.progressColor,
+    if (_errorMessage != null) {
+      return Material(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.white),
+                  textAlign: TextAlign.center,
                 ),
-                child: const Text('Retry'),
-              ),
-            ],
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _initializeVideo,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: widget.progressColor,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
           ),
         ),
+      );
+    }
+
+    return Material(
+      color: widget.backgroundColor,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final aspectRatio = widget.aspectRatio ?? 
+                            (_controller.value.isInitialized 
+                              ? _controller.value.aspectRatio 
+                              : 16/9);
+          
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                children: [
+                  AspectRatio(
+                    aspectRatio: aspectRatio,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showControls = !_showControls;
+                          if (_showControls) {
+                            _startControlsTimer();
+                          } else {
+                            _controlsTimer?.cancel();
+                          }
+                        });
+                      },
+                      onDoubleTapDown: (details) {
+                        final screenWidth = constraints.maxWidth;
+                        final tapPosition = details.localPosition.dx;
+                        final tapPercentage = tapPosition / screenWidth;
+                        if (tapPercentage < 0.35) {
+                          _handleSeek(false);
+                        } else if (tapPercentage > 0.65) {
+                          _handleSeek(true);
+                        } else {
+                          _togglePlayPause();
+                        }
+                      },
+                      child: Stack(
+                        children: [
+                          SizedBox.expand(
+                            child: FittedBox(
+                              fit: widget.fit,
+                              child: SizedBox(
+                                width: _controller.value.size.width,
+                                height: _controller.value.size.height,
+                                child: VideoPlayer(_controller),
+                              ),
+                            ),
+                          ),
+                          if (_showControls) _buildControls(),
+                          _buildDoubleTapIndicator(),
+                          _buildSeekPreview(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  return Material(
-    color: widget.backgroundColor,
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        // Calculate aspect ratio based on video or provided value
-        final aspectRatio = widget.aspectRatio ?? 
-                          (_controller.value.isInitialized 
-                            ? _controller.value.aspectRatio 
-                            : 16/9); // Default fallback
-        
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              children: [
-                AspectRatio(
-                  aspectRatio: aspectRatio,
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _showControls = !_showControls;
-                        _showQualityMenu = false;
-                        _showSpeedMenu = false;
-                        if (_showControls) {
-                          _startControlsTimer();
-                        } else {
-                          _controlsTimer?.cancel();
-                        }
-                      });
-                    },
-                    // onHorizontalDragStart: (details) {
-                    //   setState(() {
-                    //     _isDragging = true;
-                    //     _showControls = true;
-                    //     _controlsTimer?.cancel();
-                    //   });
-                    // },
-                    // onHorizontalDragUpdate: (details) {
-                    //   final screenWidth = constraints.maxWidth;
-                    //   final dragDistance = details.primaryDelta ?? 0;
-                    //   final seekDistance = (_duration.inMilliseconds / screenWidth) * dragDistance;
-                      
-                    //   setState(() {
-                    //     _seekPosition = (_seekPosition - seekDistance).clamp(0, _duration.inMilliseconds.toDouble());
-                    //     _showSeekPreview = true;
-                    //     _seekPreviewPosition = _seekPosition;
-                    //     _seekPreviewTime = _formatDuration(Duration(milliseconds: _seekPreviewPosition.toInt()));
-                    //   });
-                    // },
-                    // onHorizontalDragEnd: (details) {
-                    //   _controller.seekTo(Duration(milliseconds: _seekPosition.toInt()));
-                    //   setState(() {
-                    //     _isDragging = false;
-                    //     _showSeekPreview = false;
-                    //   });
-                    //   _startControlsTimer();
-                    // },
-                    // onTapDown: (details) {
-                    //   // Show controls and reset timer
-                    //     setState(() => _showControls = true);
-                    //     _startControlsTimer();
-                    //     // Middle 30% - toggle play/pause
-                    //     // _togglePlayPause();
-                    // },
-                    onDoubleTapDown: (details) {
-                      final screenWidth = constraints.maxWidth;
-                      final tapPosition = details.localPosition.dx;
-                      final tapPercentage = tapPosition / screenWidth;
-                      if (tapPercentage < 0.35) {
-                        // Left 35% - seek backward
-                        _handleSeek(false);
-                      } else if (tapPercentage > 0.65) {
-                        // Right 35% - seek forward
-                        _handleSeek(true);
-                      } else {
-                        // Middle 30% - toggle play/pause
-                        _togglePlayPause();
-                      }
-                    },
-                    child: Stack(
-                      children: [
-                        SizedBox.expand(
-                          child: FittedBox(
-                            fit: widget.fit,
-                            child: SizedBox(
-                              width: _controller.value.size.width,
-                              height: _controller.value.size.height,
-                              child: VideoPlayer(_controller),
-                            ),
-                          ),
-                        ),
-                        if (_showControls) _buildControls(),
-                        if (_showQualityMenu) _buildQualityMenu(),
-                        if (_showSpeedMenu) _buildSpeedMenu(),
-                        _buildDoubleTapIndicator(),
-                        _buildSeekPreview(),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    ),
-  );
-}
+  void _handleSeek(bool forward) {
+    if (_doubleTapSeeking) return;
 
-// Add this new method to handle seek on tap
-void _handleSeek(bool forward) {
-  if (_doubleTapSeeking) return;
-
-  setState(() {
-    _isDoubleTapRight = forward;
-    _showDoubleTapIndicator = true;
-    _doubleTapSeekDuration = Duration(seconds: _seekDurationSeconds.toInt());
-  });
-
-  if (forward) {
-    _controller.seekTo(_controller.value.position + _doubleTapSeekDuration);
-  } else {
-    _controller.seekTo(_controller.value.position - _doubleTapSeekDuration);
-  }
-
-  _doubleTapSeeking = true;
-  _doubleTapTimer?.cancel();
-  _doubleTapTimer = Timer(const Duration(milliseconds: 800), () {
     setState(() {
-      _showDoubleTapIndicator = false;
-      _doubleTapSeeking = false;
+      _isDoubleTapRight = forward;
+      _showDoubleTapIndicator = true;
+      _doubleTapSeekDuration = Duration(seconds: _seekDurationSeconds.toInt());
     });
-  });
-  
-  // Show controls and reset timer
-  setState(() => _showControls = true);
-  _startControlsTimer();
-}
+
+    if (forward) {
+      _controller.seekTo(_controller.value.position + _doubleTapSeekDuration);
+    } else {
+      _controller.seekTo(_controller.value.position - _doubleTapSeekDuration);
+    }
+
+    _doubleTapSeeking = true;
+    _doubleTapTimer?.cancel();
+    _doubleTapTimer = Timer(const Duration(milliseconds: 800), () {
+      setState(() {
+        _showDoubleTapIndicator = false;
+        _doubleTapSeeking = false;
+      });
+    });
+    
+    setState(() => _showControls = true);
+    _startControlsTimer();
+  }
 }

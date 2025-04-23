@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:vimyo/controller/video_controller.dart';
 import 'package:vimyo/video_details_page.dart';
 import 'package:vimyo/video_upload_page.dart';
-import 'package:vimyo/widgets/custom_video_player.dart';
 import 'package:vimyo/widgets/vimeo_video_player.dart';
 
 class VideoListPage extends StatelessWidget {
@@ -68,8 +67,8 @@ class VideoListPage extends StatelessWidget {
             ));
           } else {
             Get.to(() => VimeoVideoPlayerPage(
-                  videoUrl: videoFiles[2]["link"].toString(),
-                ));
+              videoUrl: video['uri'].split('/').last,
+            ));
           }
         },
         child: Container(

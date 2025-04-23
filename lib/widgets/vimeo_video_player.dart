@@ -18,7 +18,7 @@ class VimeoVideoPlayerPageState extends State<VimeoVideoPlayerPage> {
       body: Center(
         child: Center(
           child: SizedBox(
-            height: 250,
+            height: MediaQuery.of(context).size.height-100,
             child: VimeoPlayer(
               videoId: widget.videoUrl,
             ),
@@ -28,3 +28,5 @@ class VimeoVideoPlayerPageState extends State<VimeoVideoPlayerPage> {
     );
   }
 }
+ 
+ 
