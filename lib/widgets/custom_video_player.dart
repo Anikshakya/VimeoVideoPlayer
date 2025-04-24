@@ -105,6 +105,26 @@ class _CustomVideoPlayerState extends State<CustomVideoPlayer> {
       _controller = VideoPlayerController.networkUrl(Uri.parse(_currentQuality!['link'].toString()))
         ..addListener(_videoListener);
 
+        await _controller.initialize().then((_) {
+        if (mounted) {
+          setState(() {
+            _duration = _controller.value.duration;
+            _isLoading = false;
+            _seekPosition = 0;
+          });
+          _controller.play();
+          _isPlaying = true;
+          _startControlsTimer();
+        }
+      }).catchError((e) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Failed to initialize video: ${e.toString()}';
+            _isLoading = false;
+          });
+        }
+      });
+
     } catch (e) {
       if (mounted) {
         setState(() {
